@@ -88,12 +88,22 @@ export default function App(){
   const [user,setUser]=useState(null),[al,setAl]=useState(true),[tab,setTab]=useState("dashboard");
   const [trades,setTrades]=useState([]),[tl,setTl]=useState(false);
   const [settings,setSettings]=useState({balance:10000,riskPct:1});
+  const settingsTimer=useRef(null);
   const [form,setForm]=useState(ef()),[editId,setEditId]=useState(null);
   const [aiMsg,setAiMsg]=useState(""),[aiLoad,setAiLoad]=useState(false);
   const [fs,setFs]=useState("Todos"),[ip,setIp]=useState(null),[modal,setModal]=useState(false),[notif,setNotif]=useState(null);
 
   useEffect(()=>{supabase.auth.getSession().then(({data})=>{setUser(data.session?.user??null);setAl(false);});const{data:{subscription:s}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));return()=>s.unsubscribe();},[]);
-  useEffect(()=>{if(user)load();},[user]);
+  useEffect(()=>{if(user){load();loadSettings();}},[user]);
+
+  async function loadSettings(){
+    const{data}=await supabase.from("user_settings").select("*").eq("user_id",user.id).single();
+    if(data)setSettings({balance:data.balance,riskPct:data.risk_pct});
+  }
+
+  async function saveSettings(newSettings){
+    await supabase.from("user_settings").upsert({user_id:user.id,balance:newSettings.balance,risk_pct:newSettings.riskPct,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+  }
 
   async function load(){setTl(true);const{data}=await supabase.from("trades").select("*").eq("user_id",user.id).order("date",{ascending:false});if(data)setTrades(data);setTl(false);}
   function notify(msg,color=C.green){setNotif({msg,color});setTimeout(()=>setNotif(null),3000);}
@@ -265,8 +275,8 @@ export default function App(){
           <h2 style={{margin:0,fontSize:22,fontWeight:700}}>Configuración</h2>
           <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:24,display:"flex",flexDirection:"column",gap:16}}>
             <div style={{fontSize:13,color:C.text,padding:"8px 12px",background:C.surface,borderRadius:8}}>📧 {user.email}</div>
-            <Field label="Balance Inicial ($)"><input type="number" value={settings.balance} onChange={e=>setSettings(s=>({...s,balance:parseFloat(e.target.value)||0}))} style={iS}/></Field>
-            <Field label="Riesgo por defecto (%)"><input type="number" step="0.1" value={settings.riskPct} onChange={e=>setSettings(s=>({...s,riskPct:parseFloat(e.target.value)||1}))} style={iS}/></Field>
+            <Field label="Balance Inicial ($)"><input type="number" value={settings.balance} onChange={e=>{const v={...settings,balance:parseFloat(e.target.value)||0};setSettings(v);clearTimeout(settingsTimer.current);settingsTimer.current=setTimeout(()=>saveSettings(v),800);}} style={iS}/></Field>
+            <Field label="Riesgo por defecto (%)"><input type="number" step="0.1" value={settings.riskPct} onChange={e=>{const v={...settings,riskPct:parseFloat(e.target.value)||1};setSettings(v);clearTimeout(settingsTimer.current);settingsTimer.current=setTimeout(()=>saveSettings(v),800);}} style={iS}/></Field>
             <button onClick={signOut} style={{background:C.red+"22",color:C.red,border:`1px solid ${C.red}44`,borderRadius:8,padding:"10px 18px",fontSize:13,cursor:"pointer",fontFamily:"inherit"}}>🚪 Cerrar Sesión</button>
           </div>
         </div>}
