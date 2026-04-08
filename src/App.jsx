@@ -92,6 +92,18 @@ export default function App(){
   const [form,setForm]=useState(ef()),[editId,setEditId]=useState(null);
   const [aiMsg,setAiMsg]=useState(""),[aiLoad,setAiLoad]=useState(false);
   const [fs,setFs]=useState("Todos"),[ip,setIp]=useState(null),[modal,setModal]=useState(false),[notif,setNotif]=useState(null);
+  const [timeFiler,setTimeFilter]=useState("Todo");
+
+  function applyTimeFilter(tradesList){
+    const now=new Date();
+    if(timeFiler==="Hoy"){const s=new Date(now.getFullYear(),now.getMonth(),now.getDate());return tradesList.filter(t=>new Date(t.date)>=s);}
+    if(timeFiler==="Semana"){const s=new Date(now);s.setDate(now.getDate()-now.getDay());s.setHours(0,0,0,0);return tradesList.filter(t=>new Date(t.date)>=s);}
+    if(timeFiler==="Mes"){const s=new Date(now.getFullYear(),now.getMonth(),1);return tradesList.filter(t=>new Date(t.date)>=s);}
+    if(timeFiler==="3 Meses"){const s=new Date(now);s.setMonth(now.getMonth()-3);return tradesList.filter(t=>new Date(t.date)>=s);}
+    if(timeFiler==="6 Meses"){const s=new Date(now);s.setMonth(now.getMonth()-6);return tradesList.filter(t=>new Date(t.date)>=s);}
+    if(timeFiler==="Este año"){const s=new Date(now.getFullYear(),0,1);return tradesList.filter(t=>new Date(t.date)>=s);}
+    return tradesList;
+  }
 
   useEffect(()=>{supabase.auth.getSession().then(({data})=>{setUser(data.session?.user??null);setAl(false);});const{data:{subscription:s}}=supabase.auth.onAuthStateChange((_,session)=>setUser(session?.user??null));return()=>s.unsubscribe();},[]);
   useEffect(()=>{if(user){load();loadSettings();}},[user]);
@@ -123,7 +135,7 @@ export default function App(){
   function img(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>{setForm(x=>({...x,image:ev.target.result}));setIp(ev.target.result);};r.readAsDataURL(f);}
   async function signOut(){await supabase.auth.signOut();setTrades([]);setTab("dashboard");}
 
-  const ct=trades.filter(t=>t.pnl_usd!==null&&t.pnl_usd!==undefined);
+  const ct=applyTimeFilter(trades).filter(t=>t.pnl_usd!==null&&t.pnl_usd!==undefined);
   const wins=ct.filter(t=>t.pnl_usd>0),losses=ct.filter(t=>t.pnl_usd<0);
   const tPnl=ct.reduce((s,t)=>s+(t.pnl_usd||0),0),bal=settings.balance+tPnl;
   const wr=ct.length?(wins.length/ct.length*100).toFixed(1):"0.0";
@@ -151,8 +163,10 @@ export default function App(){
     setAiLoad(false);
   }
 
-  const TABS=[{id:"dashboard",l:"Dashboard",i:"◈"},{id:"trades",l:"Operaciones",i:"≡"},{id:"stats",l:"Estadísticas",i:"▲"},{id:"psychology",l:"Psicología",i:"◎"},{id:"ai",l:"IA Coach",i:"✦"},{id:"settings",l:"Config",i:"⚙"}];
-  const ft=fs==="Todos"?trades:trades.filter(t=>t.setup===fs);
+  const TIME_OPTIONS=["Todo","Hoy","Semana","Mes","3 Meses","6 Meses","Este año"];
+  const timeTrades=applyTimeFilter(trades);
+  const ft=applyTimeFilter(fs==="Todos"?trades:trades.filter(t=>t.setup===fs));
+  const TABS=[{id:"dashboard",l:"Dashboard",i:"◈"},{id:"trades",l:"Operaciones",i:"≡"},{id:"stats",l:"Estadísticas",i:"▲"},{id:"monthly",l:"Por Mes",i:"📅"},{id:"report",l:"Reporte",i:"📋"},{id:"psychology",l:"Psicología",i:"◎"},{id:"ai",l:"IA Coach",i:"✦"},{id:"settings",l:"Config",i:"⚙"}];
 
   if(al)return <div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"monospace",color:C.muted}}><div style={{textAlign:"center"}}><div style={{fontSize:32,marginBottom:12}}>◈</div><div>Cargando...</div></div></div>;
   if(!user)return <AuthScreen onAuth={setUser}/>;
@@ -178,10 +192,11 @@ export default function App(){
       <div style={{maxWidth:1200,margin:"0 auto",padding:"24px 16px"}}>
 
         {tab==="dashboard"&&<div className="fa" style={{display:"flex",flexDirection:"column",gap:20}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div><h2 style={{margin:0,fontSize:22,fontWeight:700}}>Dashboard</h2><div style={{color:C.muted,fontSize:12}}>{ct.length} operaciones</div></div>
-            <button className="bp" onClick={()=>{setEditId(null);setForm(ef());setIp(null);setModal(true);}} style={{padding:"10px 20px"}}>＋ Nueva Operación</button>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>{TIME_OPTIONS.map(o=><button key={o} onClick={()=>setTimeFilter(o)} style={{background:timeFiler===o?C.accent+"22":"transparent",color:timeFiler===o?C.accent:C.muted,border:`1px solid ${timeFiler===o?C.accent+"44":C.border}`,borderRadius:6,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:timeFiler===o?700:400}}>{o}</button>)}</div>
+            <button className="bp" onClick={()=>{setEditId(null);setForm(ef());setIp(null);setModal(true);}} style={{padding:"8px 18px"}}>＋ Nueva Operación</button>
           </div>
+          <div><h2 style={{margin:0,fontSize:22,fontWeight:700}}>Dashboard</h2><div style={{color:C.muted,fontSize:12}}>{timeFiler!="Todo"?ct.length+" ops · "+timeFiler:ct.length+" operaciones totales"}</div></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12}}>
             <StatCard label="Balance" value={"$"+bal.toLocaleString("en",{maximumFractionDigits:0})} sub={(tPnl>=0?"+":"")+"$"+tPnl.toFixed(0)+" P&L"} color={tPnl>=0?C.green:C.red} icon="💰"/>
             <StatCard label="Winrate" value={wr+"%"} sub={wins.length+"W / "+losses.length+"L"} color={parseFloat(wr)>=50?C.green:C.red} icon="🎯"/>
@@ -208,7 +223,7 @@ export default function App(){
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
             <h2 style={{margin:0,fontSize:22,fontWeight:700}}>Operaciones</h2>
             <div style={{display:"flex",gap:10,alignItems:"center"}}>
-              <select value={fs} onChange={e=>setFs(e.target.value)} style={{...iS,width:"auto",padding:"7px 12px"}}><option>Todos</option>{SETUPS.map(s=><option key={s}>{s}</option>)}</select>
+              <select value={timeFiler} onChange={e=>setTimeFilter(e.target.value)} style={{...iS,width:"auto",padding:"7px 12px"}}>{TIME_OPTIONS.map(o=><option key={o}>{o}</option>)}</select><select value={fs} onChange={e=>setFs(e.target.value)} style={{...iS,width:"auto",padding:"7px 12px"}}><option>Todos</option>{SETUPS.map(s=><option key={s}>{s}</option>)}</select>
               <button className="bp" onClick={()=>{setEditId(null);setForm(ef());setIp(null);setModal(true);}} style={{padding:"8px 18px"}}>＋ Nuevo</button>
             </div>
           </div>
@@ -237,6 +252,98 @@ export default function App(){
               <div style={{color:C.muted,fontSize:11,letterSpacing:2,textTransform:"uppercase",marginBottom:14}}>Resumen Setups</div>
               {ss.length===0?<div style={{color:C.muted}}>Sin datos</div>:ss.map(s=><div key={s.setup} style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`,fontSize:12}}><span>{s.setup}</span><span style={{color:C.muted}}>{s.count}op</span><span style={{color:parseFloat(s.wr)>=50?C.green:C.red}}>{s.wr}%</span><span style={{color:s.pnl>=0?C.green:C.red}}>{s.pnl>=0?"+":""}${s.pnl.toFixed(0)}</span></div>)}
             </div>
+          </div>
+        </div>}
+
+        
+        {tab==="monthly"&&<div className="fa" style={{display:"flex",flexDirection:"column",gap:20}}>
+          <h2 style={{margin:0,fontSize:22,fontWeight:700}}>📅 Estadísticas por Mes</h2>
+          {(()=>{
+            const months={};
+            trades.forEach(t=>{
+              const d=new Date(t.date);
+              const key=d.getFullYear()+"-"+(d.getMonth()+1).toString().padStart(2,"0");
+              const label=d.toLocaleString("es",{month:"long",year:"numeric"});
+              if(!months[key])months[key]={key,label,trades:[],wins:0,losses:0,pnl:0,pnlR:0,emotions:[]};
+              months[key].trades.push(t);
+              if(t.pnl_usd>0)months[key].wins++;
+              if(t.pnl_usd<0)months[key].losses++;
+              months[key].pnl+=t.pnl_usd||0;
+              months[key].pnlR+=parseFloat(t.pnl_r)||0;
+              if(t.emotion)months[key].emotions.push(t.emotion);
+            });
+            const sorted=Object.values(months).sort((a,b)=>b.key.localeCompare(a.key));
+            if(sorted.length===0)return <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,padding:60,textAlign:"center",color:C.muted}}>Sin operaciones registradas</div>;
+            return sorted.map(m=>{
+              const wr=m.trades.length?(m.wins/m.trades.length*100).toFixed(1):0;
+              const avgR=m.trades.length?(m.pnlR/m.trades.length).toFixed(2):0;
+              const avgEmo=m.emotions.length?(m.emotions.reduce((a,b)=>a+b,0)/m.emotions.length).toFixed(1):"-";
+              return <div key={m.key} style={{background:C.card,border:`1px solid ${C.border}`,borderLeft:`4px solid ${m.pnl>=0?C.green:C.red}`,borderRadius:12,padding:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:16,textTransform:"capitalize"}}>{m.label}</div>
+                    <div style={{color:C.muted,fontSize:12,marginTop:2}}>{m.trades.length} operaciones · {m.wins}W / {m.losses}L</div>
+                  </div>
+                  <div style={{display:"flex",gap:20,flexWrap:"wrap"}}>
+                    <div style={{textAlign:"center"}}><div style={{color:m.pnl>=0?C.green:C.red,fontWeight:700,fontSize:20}}>{m.pnl>=0?"+":""}${m.pnl.toFixed(0)}</div><div style={{color:C.muted,fontSize:10,letterSpacing:1}}>P&L</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:parseFloat(wr)>=50?C.green:C.red,fontWeight:700,fontSize:20}}>{wr}%</div><div style={{color:C.muted,fontSize:10,letterSpacing:1}}>WINRATE</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:parseFloat(avgR)>0?C.green:C.red,fontWeight:700,fontSize:20}}>{avgR>0?"+":""}{avgR}R</div><div style={{color:C.muted,fontSize:10,letterSpacing:1}}>AVG R</div></div>
+                    <div style={{textAlign:"center"}}><div style={{color:C.accent,fontWeight:700,fontSize:20}}>{avgEmo}/10</div><div style={{color:C.muted,fontSize:10,letterSpacing:1}}>EMOCIÓN</div></div>
+                  </div>
+                </div>
+                <div style={{marginTop:14,display:"flex",gap:6,flexWrap:"wrap"}}>
+                  {Object.entries(m.trades.reduce((acc,t)=>{acc[t.setup]=(acc[t.setup]||0)+1;return acc;},{})).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([s,c])=><span key={s} style={{background:C.purple+"22",color:C.purple,border:`1px solid ${C.purple}44`,borderRadius:4,padding:"2px 8px",fontSize:11}}>{s} ×{c}</span>)}
+                </div>
+              </div>;
+            });
+          })()}
+        </div>}
+
+        {tab==="report"&&<div className="fa" style={{display:"flex",flexDirection:"column",gap:20}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}>
+            <h2 style={{margin:0,fontSize:22,fontWeight:700}}>📋 Reporte de Datos</h2>
+            <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+              <select value={timeFiler} onChange={e=>setTimeFilter(e.target.value)} style={{...iS,width:"auto",padding:"7px 14px"}}>{TIME_OPTIONS.map(o=><option key={o}>{o}</option>)}</select>
+              <select value={fs} onChange={e=>setFs(e.target.value)} style={{...iS,width:"auto",padding:"7px 14px"}}><option>Todos</option>{SETUPS.map(s=><option key={s}>{s}</option>)}</select>
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10}}>
+            {(()=>{const trs=ft.filter(t=>t.pnl_usd!==null);const w=trs.filter(t=>t.pnl_usd>0);const l=trs.filter(t=>t.pnl_usd<0);const p=trs.reduce((s,t)=>s+(t.pnl_usd||0),0);const gw=w.reduce((s,t)=>s+t.pnl_usd,0);const gl=Math.abs(l.reduce((s,t)=>s+t.pnl_usd,0));const pff=gl>0?(gw/gl).toFixed(2):gw>0?"∞":"0.00";const ar=trs.length?(trs.reduce((s,t)=>s+(parseFloat(t.pnl_r)||0),0)/trs.length).toFixed(2):"0.00";const wr2=trs.length?(w.length/trs.length*100).toFixed(1):"0.0";return(<>
+              <StatCard label="Operaciones" value={trs.length} icon="📊"/>
+              <StatCard label="P&L" value={(p>=0?"+":"")+"$"+p.toFixed(0)} color={p>=0?C.green:C.red} icon="💰"/>
+              <StatCard label="Winrate" value={wr2+"%"} color={parseFloat(wr2)>=50?C.green:C.red} icon="🎯"/>
+              <StatCard label="Profit Factor" value={pff} color={parseFloat(pff)>=1.5?C.green:C.yellow} icon="⚡"/>
+              <StatCard label="Avg R" value={ar+"R"} color={parseFloat(ar)>0?C.green:C.red} icon="📈"/>
+              <StatCard label="Ganadas" value={w.length} color={C.green} icon="✅"/>
+              <StatCard label="Perdidas" value={l.length} color={C.red} icon="❌"/>
+            </>);})()}
+          </div>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:12,overflow:"hidden"}}>
+            <div style={{padding:"14px 20px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{color:C.muted,fontSize:11,letterSpacing:2,textTransform:"uppercase"}}>Todas las operaciones · {ft.length} resultados</div>
+            </div>
+            {ft.length===0?<div style={{padding:40,textAlign:"center",color:C.muted}}>Sin operaciones en este período</div>:
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                <thead><tr style={{background:C.surface}}>{["Fecha","Activo","TF","Tipo","Setup","Entrada","SL","TP","R","P&L","Riesgo%","Emoción","Reglas","Error"].map(h=><th key={h} style={{padding:"10px 14px",textAlign:"left",color:C.muted,fontWeight:600,letterSpacing:1,whiteSpace:"nowrap",borderBottom:`1px solid ${C.border}`}}>{h}</th>)}</tr></thead>
+                <tbody>{ft.map((t,i)=><tr key={t.id} className="tr" style={{borderBottom:`1px solid ${C.border}`,background:i%2===0?"transparent":C.surface+"44"}}>
+                  <td style={{padding:"10px 14px",whiteSpace:"nowrap",color:C.muted}}>{new Date(t.date).toLocaleDateString("es")}</td>
+                  <td style={{padding:"10px 14px",fontWeight:700}}>{t.asset}</td>
+                  <td style={{padding:"10px 14px",color:C.muted}}>{t.tf}</td>
+                  <td style={{padding:"10px 14px"}}><span style={{color:t.type==="Buy"?C.green:C.red,fontWeight:700}}>{t.type}</span></td>
+                  <td style={{padding:"10px 14px"}}><span style={{background:C.purple+"22",color:C.purple,borderRadius:4,padding:"2px 6px"}}>{t.setup}</span></td>
+                  <td style={{padding:"10px 14px",color:C.muted}}>{t.entry||"-"}</td>
+                  <td style={{padding:"10px 14px",color:C.red}}>{t.sl||"-"}</td>
+                  <td style={{padding:"10px 14px",color:C.green}}>{t.tp||"-"}</td>
+                  <td style={{padding:"10px 14px",color:parseFloat(t.pnl_r)>0?C.green:C.red,fontWeight:600}}>{t.pnl_r>0?"+":""}{t.pnl_r}R</td>
+                  <td style={{padding:"10px 14px",color:t.pnl_usd>=0?C.green:C.red,fontWeight:700}}>{t.pnl_usd>=0?"+":""}${t.pnl_usd?.toFixed(0)}</td>
+                  <td style={{padding:"10px 14px",color:C.muted}}>{t.risk_pct}%</td>
+                  <td style={{padding:"10px 14px",color:t.emotion>=7?C.green:t.emotion>=5?C.yellow:C.red}}>{t.emotion}/10</td>
+                  <td style={{padding:"10px 14px"}}><span style={{color:t.followed_rules?C.green:C.red}}>{t.followed_rules?"✓":"✗"}</span></td>
+                  <td style={{padding:"10px 14px",color:C.muted,fontSize:11}}>{t.error}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>}
           </div>
         </div>}
 
